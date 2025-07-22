@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isScrubbing = false;
     let wasPlayingBeforeScrub = false;
     let pressTimer = null;
-    let currentlyPlayingId = null; // NEW: To track the current song for autoplay
+    let currentlyPlayingId = null; // To track the current song for autoplay
 
     // --- DATABASE LOGIC ---
     const dbName = 'MomsMediaPlayerDB';
@@ -179,27 +179,30 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
     
-    // --- NEW: AUTOPLAY NEXT FUNCTION ---
+    // --- UPDATED: AUTOPLAY NEXT FUNCTION WITH LOOPING ---
     function playNext() {
         if (currentlyPlayingId === null) return;
 
         const allMediaItems = Array.from(mediaListEl.querySelectorAll('li[data-id]'));
-        if (allMediaItems.length < 2) {
+        if (allMediaItems.length === 0) {
             stopPlayback();
             return;
         }
-
+        
         const currentIndex = allMediaItems.findIndex(item => parseInt(item.dataset.id) === currentlyPlayingId);
+        let nextIndex;
 
         if (currentIndex > -1 && currentIndex < allMediaItems.length - 1) {
-            // If there is a next song, play it
-            const nextItem = allMediaItems[currentIndex + 1];
-            const nextId = parseInt(nextItem.dataset.id);
-            playMedia(nextId);
+            // If there is a next song in the list, get its index
+            nextIndex = currentIndex + 1;
         } else {
-            // Otherwise, it's the end of the list, so stop
-            stopPlayback();
+            // Otherwise, it's the end of the list, so loop back to the beginning
+            nextIndex = 0;
         }
+        
+        const nextItem = allMediaItems[nextIndex];
+        const nextId = parseInt(nextItem.dataset.id);
+        playMedia(nextId);
     }
 
     function stopPlayback() {
