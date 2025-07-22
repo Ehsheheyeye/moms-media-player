@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const mediaListEl = document.getElementById('media-list');
     const emptyStateEl = document.getElementById('empty-state');
     const addMediaButton = document.getElementById('add-media-button');
+    const stopButton = document.getElementById('stop-button'); // New STOP button
     const mediaFileInput = document.getElementById('media-file-input');
     const thumbnailFileInput = document.getElementById('thumbnail-file-input');
     
@@ -42,6 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let db;
     let currentFileForThumbnail = null;
     let controlsTimeout;
+    let isScrubbing = false; // New state for timeline dragging
+    let wasPlayingBeforeScrub = false; // New state for timeline dragging
 
     // --- DATABASE LOGIC ---
     const dbName = 'MomsMediaPlayerDB';
@@ -49,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function initDB() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open(dbName, 2); // Version 2 for thumbnail support
+            const request = indexedDB.open(dbName, 2); 
 
             request.onerror = (e) => {
                 console.error('Database error:', e.target.error);
@@ -59,15 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             request.onupgradeneeded = (e) => {
                 const dbInstance = e.target.result;
-                let objectStore;
                 if (!dbInstance.objectStoreNames.contains(storeName)) {
-                    objectStore = dbInstance.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
-                } else {
-                    objectStore = e.target.transaction.objectStore(storeName);
-                }
-                // Add thumbnail field if it doesn't exist (for upgrades)
-                if (!objectStore.indexNames.contains('thumbnailURL')) {
-                     // We don't need an index, but this is a safe way to check for field existence conceptually
+                    dbInstance.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
                 }
             };
 
@@ -142,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: file.name,
                 type: file.type,
                 data: file,
-                thumbnailURL: null // Initialize thumbnail as null
+                thumbnailURL: null
             });
         }
     }
@@ -177,13 +173,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const url = URL.createObjectURL(fileData.data);
             nowPlayingTitle.textContent = fileData.name;
             nowPlayingBar.classList.remove('hidden');
+            stopButton.classList.remove('hidden'); // Show STOP button
 
             videoPlayer.pause();
             audioPlayer.pause();
             videoPlayer.src = '';
             audioPlayer.src = '';
             
-            // Set poster for video
             videoPlayer.poster = fileData.thumbnailURL || '';
 
             if (fileData.type.startsWith('video/')) {
@@ -197,6 +193,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 audioPlayer.play();
             }
         };
+    }
+
+    // --- NEW: STOP BUTTON LOGIC ---
+    function stopPlayback() {
+        videoPlayer.pause();
+        audioPlayer.pause();
+        const currentVideoSrc = videoPlayer.src;
+        const currentAudioSrc = audioPlayer.src;
+        if (currentVideoSrc) URL.revokeObjectURL(currentVideoSrc);
+        if (currentAudioSrc) URL.revokeObjectURL(currentAudioSrc);
+        videoPlayer.src = '';
+        audioPlayer.src = '';
+        videoPlayer.poster = '';
+
+        playerSection.classList.add('hidden');
+        nowPlayingBar.classList.add('hidden');
+        stopButton.classList.add('hidden');
     }
 
     // --- PLAYER CONTROL LOGIC ---
@@ -214,7 +227,6 @@ document.addEventListener('DOMContentLoaded', () => {
         videoContainer.classList.toggle('playing', isPlaying);
         const icon = isPlaying ? 'fa-pause' : 'fa-play';
         playPauseIcon.className = `fas ${icon}`;
-        // Adjust big play button icon if needed
         bigPlayButton.querySelector('i').className = `fas fa-play ml-1`;
     }
 
@@ -225,22 +237,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleTimeUpdate() {
+        if (isScrubbing) return; // Don't update UI while user is dragging
         const player = videoPlayer.src ? videoPlayer : audioPlayer;
         const currentTime = player.currentTime;
         const duration = player.duration || 0;
         timeDisplay.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
         timelineProgress.style.width = `${(currentTime / duration) * 100}%`;
     }
-
-    function handleTimelineClick(e) {
-        const timelineBounds = timelineContainer.getBoundingClientRect();
-        const clickPosition = e.clientX - timelineBounds.left;
-        const timelineWidth = timelineBounds.width;
-        const seekRatio = clickPosition / timelineWidth;
-        const player = videoPlayer.src ? videoPlayer : audioPlayer;
-        player.currentTime = seekRatio * player.duration;
-    }
     
+    // --- UPDATED: DRAGGABLE TIMELINE LOGIC ---
+    function handleTimelineInteraction(e) {
+        const player = videoPlayer.src ? videoPlayer : audioPlayer;
+        if (!player.duration) return;
+
+        const timelineBounds = timelineContainer.getBoundingClientRect();
+        // Use clientX for mouse events, and targetTouches[0].clientX for touch events
+        const clientX = e.clientX ?? e.targetTouches[0].clientX;
+        const clickPosition = clientX - timelineBounds.left;
+        const timelineWidth = timelineBounds.width;
+        
+        // Ensure position is within bounds (0 to 1)
+        let seekRatio = Math.max(0, Math.min(1, clickPosition / timelineWidth));
+        
+        player.currentTime = seekRatio * player.duration;
+        // Also update the UI immediately for responsiveness
+        timelineProgress.style.width = `${seekRatio * 100}%`;
+    }
+
     function toggleFullscreen() {
         if (!document.fullscreenElement) {
             videoContainer.requestFullscreen().catch(err => {
@@ -268,6 +291,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- EVENT LISTENERS ---
     addMediaButton.addEventListener('click', () => mediaFileInput.click());
+    stopButton.addEventListener('click', stopPlayback); // New listener
+
     mediaFileInput.addEventListener('change', (e) => {
         if (e.target.files.length > 0) addFilesToDB(e.target.files);
         e.target.value = '';
@@ -302,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
     videoPlayer.addEventListener('play', () => updatePlayPauseUI(true));
     videoPlayer.addEventListener('pause', () => updatePlayPauseUI(false));
     videoPlayer.addEventListener('timeupdate', handleTimeUpdate);
-    videoPlayer.addEventListener('loadedmetadata', handleTimeUpdate); // Initial time display
+    videoPlayer.addEventListener('loadedmetadata', handleTimeUpdate);
     audioPlayer.addEventListener('play', () => updatePlayPauseUI(true));
     audioPlayer.addEventListener('pause', () => updatePlayPauseUI(false));
     audioPlayer.addEventListener('timeupdate', handleTimeUpdate);
@@ -311,9 +336,53 @@ document.addEventListener('DOMContentLoaded', () => {
     // Controls listeners
     playPauseButton.addEventListener('click', togglePlayPause);
     bigPlayButton.addEventListener('click', togglePlayPause);
-    timelineContainer.addEventListener('click', handleTimelineClick);
     fullscreenButton.addEventListener('click', toggleFullscreen);
     document.addEventListener('fullscreenchange', updateFullscreenUI);
+
+    // --- UPDATED: DRAGGABLE TIMELINE LISTENERS ---
+    timelineContainer.addEventListener('mousedown', (e) => {
+        isScrubbing = true;
+        wasPlayingBeforeScrub = !videoPlayer.paused || !audioPlayer.paused;
+        videoPlayer.pause(); // Pause during scrub for better performance
+        audioPlayer.pause();
+        handleTimelineInteraction(e);
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (isScrubbing) {
+            handleTimelineInteraction(e);
+        }
+    });
+    document.addEventListener('mouseup', () => {
+        if (isScrubbing) {
+            isScrubbing = false;
+            if (wasPlayingBeforeScrub) {
+                const player = videoPlayer.src ? videoPlayer : audioPlayer;
+                player.play();
+            }
+        }
+    });
+    // Touch events for mobile
+    timelineContainer.addEventListener('touchstart', (e) => {
+        isScrubbing = true;
+        wasPlayingBeforeScrub = !videoPlayer.paused || !audioPlayer.paused;
+        videoPlayer.pause();
+        audioPlayer.pause();
+        handleTimelineInteraction(e);
+    }, { passive: true }); // Use passive for better scroll performance
+    document.addEventListener('touchmove', (e) => {
+        if (isScrubbing) {
+            handleTimelineInteraction(e);
+        }
+    }, { passive: true });
+    document.addEventListener('touchend', () => {
+        if (isScrubbing) {
+            isScrubbing = false;
+            if (wasPlayingBeforeScrub) {
+                const player = videoPlayer.src ? videoPlayer : audioPlayer;
+                player.play();
+            }
+        }
+    });
 
     // Controls visibility listeners
     videoContainer.addEventListener('mouseenter', showControls);
