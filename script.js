@@ -44,9 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let controlsTimeout;
     let isScrubbing = false;
     let wasPlayingBeforeScrub = false;
-    let pressTimer = null; // For long press detection
+    let pressTimer = null;
+    let currentlyPlayingId = null; // NEW: To track the current song for autoplay
 
-    // --- DATABASE LOGIC (Unchanged) ---
+    // --- DATABASE LOGIC ---
     const dbName = 'MomsMediaPlayerDB';
     const storeName = 'mediaFiles';
 
@@ -77,7 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
     
-    // --- UPDATED: Renders the new YouTube-style list ---
     function renderMediaList(files) {
         mediaListEl.innerHTML = '';
         emptyStateEl.classList.toggle('hidden', files.length > 0);
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
         files.forEach(fileData => {
             const isVideo = fileData.type.startsWith('video/');
             const li = document.createElement('li');
-            li.dataset.id = fileData.id; // Set ID on the LI for event handling
+            li.dataset.id = fileData.id;
 
             const thumbnailStyle = fileData.thumbnailURL ? `background-image: url('${fileData.thumbnailURL}')` : '';
             
@@ -136,12 +136,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
     
-    // --- NEW: Confirmation Dialog Logic ---
     function showConfirmation(title, onConfirm) {
         confirmTitle.textContent = title;
         confirmDialog.classList.remove('hidden');
         
-        // Use .cloneNode to remove old event listeners before adding new ones
         const newOkButton = confirmOkButton.cloneNode(true);
         confirmOkButton.parentNode.replaceChild(newOkButton, confirmOkButton);
         
@@ -152,53 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     confirmCancelButton.addEventListener('click', () => confirmDialog.classList.add('hidden'));
 
+    // --- PLAYER LOGIC ---
 
-    // --- EVENT LISTENERS ---
-
-    // --- UPDATED: Combined listener for click, long-press, and thumbnail button ---
-    mediaListEl.addEventListener('pointerdown', (e) => {
-        const li = e.target.closest('li[data-id]');
-        if (!li) return;
-
-        const fileId = parseInt(li.dataset.id);
-        
-        // Handle thumbnail button click separately
-        if (e.target.closest('.thumbnail-button')) {
-            e.stopPropagation(); // Prevent li click from firing
-            currentFileForThumbnail = fileId;
-            thumbnailFileInput.click();
-            return;
-        }
-
-        // Long press logic
-        pressTimer = setTimeout(() => {
-            showConfirmation(`Delete "${li.querySelector('.title').textContent}"?`, () => {
-                deleteMedia(fileId);
-            });
-        }, 750); // 750ms for a long press
-    });
-
-    mediaListEl.addEventListener('pointerup', (e) => {
-        clearTimeout(pressTimer);
-    });
-
-    mediaListEl.addEventListener('pointerleave', (e) => {
-        clearTimeout(pressTimer);
-    });
-    
-    // Simple click to play
-    mediaListEl.addEventListener('click', (e) => {
-        const li = e.target.closest('li[data-id]');
-        // Make sure it's a direct click on the list item, not a button inside it
-        if (li && !e.target.closest('button')) {
-            playMedia(parseInt(li.dataset.id));
-        }
-    });
-
-
-    // --- All other functions and listeners for player controls, etc. remain the same ---
-    
     function playMedia(id) {
+        currentlyPlayingId = id; // Set the currently playing ID
         const transaction = db.transaction([storeName], 'readonly');
         const request = transaction.objectStore(storeName).get(id);
         request.onsuccess = () => {
@@ -223,6 +178,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
     }
+    
+    // --- NEW: AUTOPLAY NEXT FUNCTION ---
+    function playNext() {
+        if (currentlyPlayingId === null) return;
+
+        const allMediaItems = Array.from(mediaListEl.querySelectorAll('li[data-id]'));
+        if (allMediaItems.length < 2) {
+            stopPlayback();
+            return;
+        }
+
+        const currentIndex = allMediaItems.findIndex(item => parseInt(item.dataset.id) === currentlyPlayingId);
+
+        if (currentIndex > -1 && currentIndex < allMediaItems.length - 1) {
+            // If there is a next song, play it
+            const nextItem = allMediaItems[currentIndex + 1];
+            const nextId = parseInt(nextItem.dataset.id);
+            playMedia(nextId);
+        } else {
+            // Otherwise, it's the end of the list, so stop
+            stopPlayback();
+        }
+    }
 
     function stopPlayback() {
         videoPlayer.pause(); audioPlayer.pause();
@@ -232,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
         playerSection.classList.add('hidden');
         nowPlayingBar.classList.add('hidden');
         stopButton.classList.add('hidden');
+        currentlyPlayingId = null; // Reset tracker
     }
 
     function togglePlayPause() {
@@ -267,6 +246,8 @@ document.addEventListener('DOMContentLoaded', () => {
         timelineProgress.style.width = `${seekRatio * 100}%`;
     }
 
+    // --- EVENT LISTENERS ---
+
     addMediaButton.addEventListener('click', () => mediaFileInput.click());
     stopButton.addEventListener('click', stopPlayback);
     mediaFileInput.addEventListener('change', (e) => {
@@ -282,14 +263,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         e.target.value = '';
     });
+
+    mediaListEl.addEventListener('pointerdown', (e) => {
+        const li = e.target.closest('li[data-id]');
+        if (!li) return;
+        if (e.target.closest('.thumbnail-button')) {
+            e.stopPropagation();
+            currentFileForThumbnail = parseInt(li.dataset.id);
+            thumbnailFileInput.click();
+            return;
+        }
+        pressTimer = setTimeout(() => {
+            showConfirmation(`Delete "${li.querySelector('.title').textContent}"?`, () => {
+                deleteMedia(parseInt(li.dataset.id));
+            });
+        }, 750);
+    });
+    mediaListEl.addEventListener('pointerup', () => clearTimeout(pressTimer));
+    mediaListEl.addEventListener('pointerleave', () => clearTimeout(pressTimer));
+    mediaListEl.addEventListener('click', (e) => {
+        const li = e.target.closest('li[data-id]');
+        if (li && !e.target.closest('button')) {
+            playMedia(parseInt(li.dataset.id));
+        }
+    });
+
     videoPlayer.addEventListener('play', () => updatePlayPauseUI(true));
     videoPlayer.addEventListener('pause', () => updatePlayPauseUI(false));
     videoPlayer.addEventListener('timeupdate', handleTimeUpdate);
     videoPlayer.addEventListener('loadedmetadata', handleTimeUpdate);
+    videoPlayer.addEventListener('ended', playNext); // Autoplay listener
     audioPlayer.addEventListener('play', () => updatePlayPauseUI(true));
     audioPlayer.addEventListener('pause', () => updatePlayPauseUI(false));
     audioPlayer.addEventListener('timeupdate', handleTimeUpdate);
     audioPlayer.addEventListener('loadedmetadata', handleTimeUpdate);
+    audioPlayer.addEventListener('ended', playNext); // Autoplay listener
+
     playPauseButton.addEventListener('click', togglePlayPause);
     bigPlayButton.addEventListener('click', togglePlayPause);
     fullscreenButton.addEventListener('click', () => videoContainer.requestFullscreen());
