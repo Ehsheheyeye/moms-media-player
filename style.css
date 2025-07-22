@@ -1,7 +1,7 @@
-/* Basic styles for a clean, dark theme */
+/* Basic styles */
 body {
     font-family: 'Inter', sans-serif, system-ui;
-    -webkit-tap-highlight-color: transparent; /* Removes blue tap highlight on mobile */
+    -webkit-tap-highlight-color: transparent;
 }
 
 /* Custom scrollbar */
@@ -10,41 +10,71 @@ body {
 ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
 
-/* Player Controls Visibility */
-#video-container:hover #controls-container,
-#video-container.active-controls #controls-container {
-    opacity: 1;
+/* --- NEW: YouTube-style Media List --- */
+#media-list li {
+    display: flex;
+    align-items: flex-start; /* Align items to the top */
+    margin-bottom: 12px;
+    cursor: pointer;
+    background-color: #1f2937; /* Darker item background */
+    border-radius: 8px;
+    overflow: hidden; /* Ensures rounded corners are applied to children */
+    transition: background-color 0.2s;
+}
+#media-list li:hover {
+    background-color: #374151; /* Lighter on hover */
 }
 
-/* Big Play Button Visibility */
-#video-container.playing #big-play-button {
-    opacity: 0;
-    pointer-events: none; /* Make it unclickable when hidden */
+.list-thumbnail {
+    flex-shrink: 0;
+    width: 45%; /* Thumbnail takes up a good portion of the width */
+    aspect-ratio: 16 / 9; /* Standard video aspect ratio */
+    background-color: #111827;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-/* Timeline hover effect */
-.timeline-container:hover .timeline {
-    height: 6px; /* Make timeline thicker on hover */
-}
-.timeline-container:hover #timeline-progress {
-    position: relative;
-}
-/* Add a handle to the progress bar on hover */
-.timeline-container:hover #timeline-progress::after {
-    content: '';
-    position: absolute;
-    right: -6px; /* Position it at the end of the progress */
-    top: 50%;
-    transform: translateY(-50%);
-    width: 12px;
-    height: 12px;
-    background-color: white;
-    border-radius: 50%;
+.list-info {
+    flex-grow: 1;
+    padding: 10px 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
+.list-info .title {
+    font-weight: 600;
+    color: #e5e7eb;
+    /* Clamp text to 2 lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;  
+    overflow: hidden;
+    line-height: 1.3;
+}
 
-/* Custom Message Box */
-#message-box {
+.list-info .subtitle {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+
+.list-info .actions {
+    margin-top: 8px;
+    align-self: flex-end; /* Push actions to the right */
+}
+
+/* Player Controls */
+#video-container:hover #controls-container { opacity: 1; }
+#video-container.playing #big-play-button { opacity: 0; pointer-events: none; }
+.timeline-container:hover .timeline { height: 6px; }
+
+/* --- NEW: Confirmation Dialog --- */
+#confirm-dialog {
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.75);
@@ -53,6 +83,28 @@ body {
     justify-content: center;
     z-index: 50;
 }
-#message-box.hidden {
+#confirm-dialog.hidden {
     display: none;
+}
+.dialog-content {
+    background-color: #1f2937;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    padding: 24px;
+    width: 90%;
+    max-width: 320px;
+}
+.dialog-buttons {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+.dialog-buttons button {
+    color: white;
+    font-weight: bold;
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
 }
