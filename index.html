@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mom's Offline Media</title>
+    <!-- Link to your manifest file -->
+    <link rel="manifest" href="manifest.json">
+    <!-- Tailwind CSS CDN for easy styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212; /* Dark background like YouTube */
+            color: #e0e0e0; /* Light text for contrast */
+            -webkit-tap-highlight-color: transparent; /* Remove tap highlight on mobile */
+            overflow-x: hidden; /* Prevent horizontal scrolling */
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .header {
+            background-color: #202020; /* Darker header */
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            border-bottom: 1px solid #333;
+            flex-shrink: 0; /* Prevent header from shrinking */
+        }
+        .player-container {
+            width: 100%;
+            position: relative;
+            background-color: #000;
+            overflow: hidden; /* Ensure video doesn't overflow */
+            flex-shrink: 0; /* Prevent player from shrinking */
+        }
+        .player-container video, .player-container audio {
+            width: 100%;
+            height: auto; /* Maintain aspect ratio */
+            display: block;
+            background-color: #000;
+        }
+        .player-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0, 0, 0, 0.4); /* Semi-transparent overlay */
+            opacity: 1;
+            transition: opacity 0.3s ease-in-out;
+            cursor: pointer;
+        }
+        .player-overlay.hidden {
+            opacity: 0;
+            pointer-events: none; /* Allow clicks to pass through when hidden */
+        }
+        .play-pause-icon {
+            font-size: 3.5rem; /* Large icon */
+            color: white;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-radius: 50%;
+            padding: 1rem;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+        .media-content {
+            flex-grow: 1; /* Allow content to take remaining space */
+            overflow-y: auto; /* Enable scrolling for media list */
+            padding-bottom: 60px; /* Space for FAB */
+            position: relative; /* For absolute positioning of emptyState */
+        }
+        .media-list {
+            padding: 0.5rem 0; /* Vertical padding for list items */
+        }
+        .media-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            gap: 0.75rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .media-item:hover {
+            background-color: #282828; /* Slightly lighter on hover */
+        }
+        .thumbnail-wrapper {
+            width: 120px; /* Fixed width for thumbnail */
+            height: 68px; /* Aspect ratio for 16:9 videos */
+            flex-shrink: 0; /* Don't shrink thumbnail */
+            background-color: #333; /* Dark placeholder */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            border-radius: 0.375rem; /* Slightly rounded corners */
+            position: relative;
+        }
+        .thumbnail-wrapper img, .thumbnail-wrapper video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Cover the container */
+            display: block;
+        }
+        .thumbnail-wrapper .icon {
+            font-size: 2rem;
+            color: #888;
+        }
+        .duration-overlay {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .media-details {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-width: 0; /* Allow text to truncate */
+        }
+        .media-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #e0e0e0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .media-subtitle {
+            font-size: 0.8rem;
+            color: #aaa;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 0.2rem;
+        }
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 0.75rem;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+            text-align: center;
+        }
+        .message-box.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Floating action button for adding files */
+        .fab-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 1001;
+        }
+        .fab {
+            background-color: #6366f1; /* Indigo */
+            color: white;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.8rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .fab:hover {
+            background-color: #4f46e5;
+        }
+
+        /* Empty state styling to ensure it covers the content when active */
+        #emptyState {
+            display: flex; /* Use flexbox for centering content */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%; /* Take full height of parent media-content */
+            position: absolute; /* Position absolutely within media-content */
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #121212; /* Match body background */
+            z-index: 500; /* Ensure it's above media items if needed */
+        }
+        #emptyState.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <i class="fas fa-arrow-left text-xl text-gray-400"></i> <!-- Back arrow icon -->
+        <h1 class="text-xl font-semibold text-gray-200">Downloads</h1>
+        <div class="ml-auto"> <!-- Spacer to push icons to the right -->
+            <i id="clearAllBtn" class="fas fa-trash-alt text-xl text-gray-400 cursor-pointer hover:text-red-500 transition-colors duration-200" title="Clear All Media"></i>
+        </div>
+    </div>
+
+    <!-- Video/Audio Player at the top -->
+    <div id="playerContainer" class="player-container hidden">
+        <video id="videoPlayer" playsinline controlsList="nodownload nofullscreen noremoteplayback" disablePictureInPicture></video>
+        <audio id="audioPlayer" playsinline controlsList="nodownload" class="hidden"></audio>
+        <div id="playerOverlay" class="player-overlay">
+            <i id="overlayPlayPauseIcon" class="fas fa-play play-pause-icon"></i>
+        </div>
+    </div>
+
+    <div class="media-content">
+        <div class="px-4 py-3 text-gray-400 text-sm font-medium">Recommended downloads</div>
+        <div id="mediaList" class="media-list">
+            <!-- Media items will be inserted here by JavaScript -->
+        </div>
+
+        <div id="emptyState" class="text-center text-gray-500 py-10 px-4">
+            <i class="fas fa-plus-circle text-6xl mb-4 text-gray-600"></i> <!-- Changed icon to match FAB -->
+            <p class="text-lg font-semibold mb-2">No media found.</p>
+            <p class="text-sm">Tap the <i class="fas fa-plus"></i> button to add videos and songs from your device.</p>
+        </div>
+    </div>
+
+    <!-- Floating Action Button for adding files -->
+    <div class="fab-container">
+        <input type="file" id="fileInput" multiple accept="video/*,audio/*" class="hidden">
+        <label for="fileInput" class="fab">
+            <i class="fas fa-plus"></i>
+        </label>
+    </div>
+
+    <!-- Custom Message Box -->
+    <div id="messageBox" class="message-box"></div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const mediaList = document.getElementById('mediaList');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const videoPlayer = document.getElementById('videoPlayer');
+        const playerContainer = document.getElementById('playerContainer');
+        const playerOverlay = document.getElementById('playerOverlay');
+        const overlayPlayPauseIcon = document.getElementById('overlayPlayPauseIcon');
+        const emptyState = document.getElementById('emptyState');
+        const messageBox = document.getElementById('messageBox');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+
+        let currentMediaElement = null; // Stores the currently playing media element (audioPlayer or videoPlayer)
+        let currentMediaFileId = null; // ID of the currently playing media from IndexedDB
+        let mediaFilesData = []; // Array to store media objects retrieved from IndexedDB
+
+        // IndexedDB setup
+        const DB_NAME = 'OfflineMediaPlayerDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'mediaFiles';
+        let db;
+
+        // Function to show a custom message box instead of alert()
+        function showMessageBox(message, duration = 3000) {
+            messageBox.textContent = message;
+            messageBox.classList.add('show');
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, duration);
+        }
+
+        // Initialize IndexedDB
+        function initDb() {
+            return new Promise((resolve, reject) => {
+                console.log('Attempting to open IndexedDB...');
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                request.onupgradeneeded = (event) => {
+                    db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                        console.log('IndexedDB object store created/upgraded.');
+                    }
+                };
+
+                request.onsuccess = (event) => {
+                    db = event.target.result;
+                    console.log('IndexedDB opened successfully.');
+                    resolve(db);
+                };
+
+                request.onerror = (event) => {
+                    console.error('IndexedDB error during open:', event.target.errorCode, event.target.error);
+                    showMessageBox('Error opening database. Media persistence may not work.');
+                    reject(event.target.error);
+                };
+            });
+        }
+
+        // Add a file to IndexedDB (now accepts the store directly)
+        async function addFileToDb(file, store) {
+            console.log(`Attempting to add file: ${file.name}`);
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const mediaObject = {
+                        name: file.name,
+                        type: file.type,
+                        data: event.target.result // ArrayBuffer
+                    };
+                    const request = store.add(mediaObject);
+
+                    request.onsuccess = () => {
+                        mediaObject.id = request.result; // Get the auto-generated ID
+                        console.log(`File "${file.name}" added to IndexedDB with ID: ${mediaObject.id}`);
+                        resolve(mediaObject); // Resolve with the added object including its ID
+                    };
+
+                    request.onerror = (event) => {
+                        console.error('Error adding file to DB:', event.target.error);
+                        showMessageBox(`Error saving ${file.name} to local storage.`);
+                        reject(event.target.error);
+                    };
+                };
+                reader.onerror = (event) => {
+                    console.error('FileReader error:', event.target.error);
+                    showMessageBox(`Error reading ${file.name} data.`);
+                    reject(event.target.error);
+                };
+                reader.readAsArrayBuffer(file); // Read file as ArrayBuffer
+            });
+        }
+
+        // Load all files from IndexedDB
+        function loadFilesFromDb() {
+            return new Promise((resolve, reject) => {
+                if (!db) {
+                    console.warn("IndexedDB not initialized when trying to load files.");
+                    resolve([]);
+                    return;
+                }
+                console.log('Attempting to load files from IndexedDB...');
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.getAll();
+
+                request.onsuccess = (event) => {
+                    mediaFilesData = event.target.result || [];
+                    mediaList.innerHTML = ''; // Clear existing list before re-rendering
+                    mediaFilesData.forEach(renderMediaItem); // Render all loaded items
+                    console.log('Files loaded from DB. Total files:', mediaFilesData.length);
+                    updateUIState(); // Update UI state after loading
+                    resolve(mediaFilesData);
+                };
+
+                request.onerror = (event) => {
+                    console.error('Error loading files from DB:', event.target.error);
+                    showMessageBox('Error loading saved media.');
+                    reject(event.target.error);
+                };
+            });
+        }
+
+        // Clear all files from IndexedDB
+        function clearAllMedia() {
+            // Using a custom modal for confirmation instead of confirm()
+            const confirmClear = document.createElement('div');
+            confirmClear.className = 'message-box show';
+            confirmClear.innerHTML = `
+                <p class="mb-4">Are you sure you want to clear all saved media? This cannot be undone.</p>
+                <button id="confirmClearBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg mr-2">Yes, Clear</button>
+                <button id="cancelClearBtn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">Cancel</button>
+            `;
+            document.body.appendChild(confirmClear);
+
+            document.getElementById('confirmClearBtn').addEventListener('click', () => {
+                confirmClear.classList.remove('show');
+                confirmClear.remove(); // Remove the modal from DOM
+
+                if (!db) {
+                    console.error('IndexedDB not initialized when trying to clear.');
+                    showMessageBox('Database not ready. Cannot clear media.');
+                    return;
+                }
+
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.clear();
+
+                request.onsuccess = () => {
+                    mediaFilesData = []; // Clear in-memory array
+                    mediaList.innerHTML = ''; // Clear displayed list
+                    updateUIState(); // Show empty state
+                    showMessageBox('All media cleared successfully!');
+                    console.log('All media cleared from IndexedDB.');
+                    // Stop any playing media
+                    if (currentMediaElement) {
+                        currentMediaElement.pause();
+                        currentMediaElement.currentTime = 0;
+                        playerContainer.classList.add('hidden');
+                        document.querySelector('.header h1').textContent = 'Downloads';
+                        document.querySelector('.header .fa-arrow-left').style.display = 'none';
+                        document.body.style.overflow = '';
+                        document.querySelector('.media-content').style.height = '';
+                        if (currentMediaElement.src) {
+                            URL.revokeObjectURL(currentMediaElement.src);
+                        }
+                        currentMediaElement = null;
+                        currentMediaFileId = null;
+                    }
+                };
+
+                request.onerror = (event) => {
+                    console.error('Error clearing media from DB:', event.target.error);
+                    showMessageBox('Error clearing media.');
+                };
+            });
+
+            document.getElementById('cancelClearBtn').addEventListener('click', () => {
+                confirmClear.classList.remove('show');
+                confirmClear.remove();
+            });
+        }
+
+        // Function to update the visibility of the empty state message
+        function updateUIState() {
+            if (mediaFilesData.length > 0) {
+                emptyState.classList.add('hidden');
+            } else {
+                emptyState.classList.remove('hidden');
+            }
+            console.log('UI state updated. Media count:', mediaFilesData.length);
+        }
+
+        // Function to format time for duration display
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+        }
+
+        // Function to generate a thumbnail for a video file (from ArrayBuffer)
+        function generateVideoThumbnail(mediaObject, callback) {
+            const video = document.createElement('video');
+            const blob = new Blob([mediaObject.data], { type: mediaObject.type });
+            video.src = URL.createObjectURL(blob);
+            video.preload = 'metadata';
+
+            let duration = '0:00';
+
+            video.onloadedmetadata = () => {
+                video.currentTime = Math.min(1, video.duration / 2);
+                duration = formatTime(video.duration);
+            };
+
+            video.onseeked = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const aspectRatio = video.videoWidth / video.videoHeight;
+                canvas.width = 120;
+                canvas.height = 120 / aspectRatio;
+                if (canvas.height > 68) {
+                    canvas.height = 68;
+                    canvas.width = 68 * aspectRatio;
+                }
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const dataURL = canvas.toDataURL('image/jpeg');
+                URL.revokeObjectURL(video.src);
+                callback(dataURL, duration);
+            };
+
+            video.onerror = () => {
+                console.error("Error loading video for thumbnail:", mediaObject.name);
+                showMessageBox(`Error generating thumbnail for ${mediaObject.name}.`);
+                URL.revokeObjectURL(video.src);
+                callback(null, 'N/A');
+            };
+        }
+
+        // Function to render a single media item
+        function renderMediaItem(mediaObject) {
+            const isVideo = mediaObject.type.startsWith('video/');
+            const item = document.createElement('div');
+            item.className = 'media-item';
+            item.dataset.id = mediaObject.id; // Store IndexedDB ID
+
+            const thumbnailWrapper = document.createElement('div');
+            thumbnailWrapper.className = 'thumbnail-wrapper';
+
+            const mediaDetails = document.createElement('div');
+            mediaDetails.className = 'media-details';
+
+            const title = document.createElement('div');
+            title.className = 'media-title';
+            title.textContent = mediaObject.name.split('.').slice(0, -1).join('.');
+
+            const subtitle = document.createElement('div');
+            subtitle.className = 'media-subtitle';
+            subtitle.textContent = isVideo ? 'Video' : 'Audio';
+
+            const durationOverlay = document.createElement('span');
+            durationOverlay.className = 'duration-overlay';
+            durationOverlay.textContent = '0:00';
+
+            if (isVideo) {
+                generateVideoThumbnail(mediaObject, (dataURL, duration) => {
+                    if (dataURL) {
+                        const img = document.createElement('img');
+                        img.src = dataURL;
+                        img.alt = mediaObject.name;
+                        thumbnailWrapper.appendChild(img);
+                    } else {
+                        const icon = document.createElement('i');
+                        icon.className = 'fas fa-video icon';
+                        thumbnailWrapper.appendChild(icon);
+                    }
+                    durationOverlay.textContent = duration;
+                });
+            } else {
+                const icon = document.createElement('i');
+                icon.className = 'fas fa-music icon';
+                thumbnailWrapper.appendChild(icon);
+
+                // Try to get audio duration
+                const tempAudioBlob = new Blob([mediaObject.data], { type: mediaObject.type });
+                const tempAudio = new Audio(URL.createObjectURL(tempAudioBlob));
+                tempAudio.onloadedmetadata = () => {
+                    durationOverlay.textContent = formatTime(tempAudio.duration);
+                    URL.revokeObjectURL(tempAudio.src);
+                };
+                tempAudio.onerror = () => {
+                    console.error("Error loading audio for duration:", mediaObject.name);
+                    showMessageBox(`Error getting duration for ${mediaObject.name}.`);
+                    durationOverlay.textContent = 'N/A';
+                    URL.revokeObjectURL(tempAudio.src);
+                };
+            }
+
+            thumbnailWrapper.appendChild(durationOverlay);
+            mediaDetails.appendChild(title);
+            mediaDetails.appendChild(subtitle);
+            item.appendChild(thumbnailWrapper);
+            item.appendChild(mediaDetails);
+
+            item.addEventListener('click', () => playMedia(mediaObject));
+            mediaList.appendChild(item);
+        }
+
+        // Play selected media
+        function playMedia(mediaObject) {
+            // Revoke previous object URL if any to free up memory
+            if (currentMediaElement && currentMediaElement.src) {
+                URL.revokeObjectURL(currentMediaElement.src);
+            }
+
+            const blob = new Blob([mediaObject.data], { type: mediaObject.type });
+            const fileURL = URL.createObjectURL(blob);
+            currentMediaFileId = mediaObject.id; // Store ID of currently playing media
+
+            const isVideo = mediaObject.type.startsWith('video/');
+
+            // Hide/show appropriate player and player container
+            playerContainer.classList.remove('hidden');
+            videoPlayer.classList.add('hidden');
+            audioPlayer.classList.add('hidden');
+
+            if (isVideo) {
+                videoPlayer.src = fileURL;
+                videoPlayer.classList.remove('hidden');
+                videoPlayer.load(); // Load the media
+                videoPlayer.play();
+                currentMediaElement = videoPlayer;
+                console.log(`Playing video: ${mediaObject.name}`);
+            } else {
+                audioPlayer.src = fileURL;
+                audioPlayer.classList.remove('hidden');
+                audioPlayer.load(); // Load the media
+                audioPlayer.play();
+                currentMediaElement = audioPlayer;
+                console.log(`Playing audio: ${mediaObject.name}`);
+            }
+
+            // Show overlay initially for video, hide for audio
+            if (isVideo) {
+                playerOverlay.classList.remove('hidden');
+                overlayPlayPauseIcon.className = 'fas fa-pause play-pause-icon'; // Assume playing
+            } else {
+                playerOverlay.classList.add('hidden'); // No overlay for audio
+            }
+
+            // Update the title in the header (optional, but good for context)
+            document.querySelector('.header h1').textContent = mediaObject.name.split('.').slice(0, -1).join('.');
+            document.querySelector('.header .fa-arrow-left').style.display = 'inline-block'; // Show back arrow
+
+            // Ensure the main list is scrollable below the player
+            document.body.style.overflow = 'hidden'; // Prevent body scroll
+            // Recalculate height to ensure it fits after player appears
+            setTimeout(() => { // Use a timeout to ensure playerContainer has rendered its height
+                document.querySelector('.media-content').style.height = `calc(100vh - ${playerContainer.offsetHeight}px - ${document.querySelector('.header').offsetHeight}px)`;
+            }, 50); // Small delay
+        }
+
+        // Toggle play/pause on overlay click for video player
+        playerOverlay.addEventListener('click', () => {
+            if (currentMediaElement === videoPlayer) { // Only for video player
+                if (videoPlayer.paused) {
+                    videoPlayer.play();
+                    console.log('Video resumed.');
+                } else {
+                    videoPlayer.pause();
+                    console.log('Video paused.');
+                }
+            }
+        });
+
+        // Update overlay icon based on video state
+        videoPlayer.addEventListener('play', () => {
+            overlayPlayPauseIcon.className = 'fas fa-pause play-pause-icon';
+            playerOverlay.classList.add('hidden'); // Hide overlay when playing
+        });
+        videoPlayer.addEventListener('pause', () => {
+            overlayPlayPauseIcon.className = 'fas fa-play play-pause-icon';
+            playerOverlay.classList.remove('hidden'); // Show overlay when paused
+        });
+        videoPlayer.addEventListener('ended', () => {
+            console.log('Video playback ended.');
+            overlayPlayPauseIcon.className = 'fas fa-play play-pause-icon';
+            playerOverlay.classList.remove('hidden');
+            // Hide the player container
+            playerContainer.classList.add('hidden');
+            document.querySelector('.header h1').textContent = 'Downloads'; // Reset header
+            document.querySelector('.header .fa-arrow-left').style.display = 'none'; // Hide back arrow
+            document.body.style.overflow = ''; // Allow body scroll
+            document.querySelector('.media-content').style.height = ''; // Reset height
+            if (currentMediaElement && currentMediaElement.src) {
+                URL.revokeObjectURL(currentMediaElement.src);
+            }
+            currentMediaElement = null;
+            currentMediaFileId = null;
+            showMessageBox("Video playback finished!");
+        });
+
+        // For audio, just handle ended event
+        audioPlayer.addEventListener('ended', () => {
+            console.log('Audio playback ended.');
+            playerContainer.classList.add('hidden');
+            document.querySelector('.header h1').textContent = 'Downloads';
+            document.querySelector('.header .fa-arrow-left').style.display = 'none';
+            document.body.style.overflow = '';
+            document.querySelector('.media-content').style.height = '';
+            if (currentMediaElement && currentMediaElement.src) {
+                URL.revokeObjectURL(currentMediaElement.src);
+            }
+            currentMediaElement = null;
+            currentMediaFileId = null;
+            showMessageBox("Audio playback finished!");
+        });
+
+        // Handle back arrow in header
+        document.querySelector('.header .fa-arrow-left').addEventListener('click', () => {
+            if (currentMediaElement) {
+                currentMediaElement.pause();
+                currentMediaElement.currentTime = 0;
+                playerContainer.classList.add('hidden');
+                document.querySelector('.header h1').textContent = 'Downloads';
+                document.querySelector('.header .fa-arrow-left').style.display = 'none';
+                document.body.style.overflow = '';
+                document.querySelector('.media-content').style.height = '';
+                if (currentMediaElement.src) {
+                    URL.revokeObjectURL(currentMediaElement.src);
+                }
+                currentMediaElement = null;
+                currentMediaFileId = null;
+                console.log('Media stopped via back arrow.');
+            }
+            // If no media is playing, this could navigate back in browser history
+            // window.history.back(); // Uncomment if you want browser back behavior
+        });
+
+        // Event listener for Clear All Media button
+        clearAllBtn.addEventListener('click', clearAllMedia);
+
+        // Initial setup on page load
+        window.onload = async () => {
+            if ('serviceWorker' in navigator) {
+                try {
+                    await navigator.serviceWorker.register('service-worker.js');
+                    console.log('Service Worker registered!');
+                } catch (error) {
+                    console.error('Service Worker registration failed:', error);
+                    showMessageBox('Service Worker registration failed. Offline features may be limited.');
+                }
+            } else {
+                console.warn('Service Workers are not supported in this browser.');
+                showMessageBox('Your browser does not support offline features. Media persistence may not work.');
+            }
+
+            await initDb();
+            await loadFilesFromDb(); // This will call updateUIState internally
+            // Hide back arrow initially
+            document.querySelector('.header .fa-arrow-left').style.display = 'none';
+            console.log('App initialized and media loaded from DB.');
+        };
+
+        // Adjust media content height on window resize
+        window.addEventListener('resize', () => {
+            if (currentMediaElement && !playerContainer.classList.contains('hidden')) {
+                // Only adjust if player is visible
+                document.querySelector('.media-content').style.height = `calc(100vh - ${playerContainer.offsetHeight}px - ${document.querySelector('.header').offsetHeight}px)`;
+            } else {
+                // If player is hidden, media-content takes full available height
+                document.querySelector('.media-content').style.height = '';
+            }
+        });
+
+    </script>
+</body>
+</html>
