@@ -34,7 +34,7 @@
                 <!-- Timeline -->
                 <div class="timeline-container h-5 flex items-center cursor-pointer">
                     <div class="timeline h-1 w-full bg-white/20 rounded">
-                        <div id="timeline-progress" class="h-full bg-red-600 rounded"></div>
+                        <div id="timeline-progress" class="h-full bg-red-600 rounded pointer-events-none"></div>
                     </div>
                 </div>
 
@@ -75,9 +75,12 @@
     </div>
 
     <!-- Footer: Action Buttons -->
-    <footer class="p-4 bg-gray-800 border-t border-gray-700 flex-shrink-0">
-        <button id="add-media-button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center text-lg">
-            <i class="fas fa-plus mr-2"></i> Add Videos & Songs
+    <footer class="p-4 bg-gray-800 border-t border-gray-700 flex-shrink-0 flex items-center space-x-4">
+        <button id="add-media-button" class="flex-grow bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center text-lg">
+            <i class="fas fa-plus mr-2"></i> Add
+        </button>
+        <button id="stop-button" class="w-1/3 bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center text-lg hidden">
+            <i class="fas fa-stop mr-2"></i> STOP
         </button>
     </footer>
 
