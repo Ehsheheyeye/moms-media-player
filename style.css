@@ -2,6 +2,7 @@
 body {
     font-family: 'Inter', sans-serif, system-ui;
     -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain; /* Prevents pull-to-refresh */
 }
 
 /* Custom scrollbar */
