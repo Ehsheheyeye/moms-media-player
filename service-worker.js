@@ -1,10 +1,9 @@
 // service-worker.js
 
-// Define a unique cache name
-const CACHE_NAME = 'offline-player-cache-v2';
+// Define a unique cache name - CHANGED TO v3 TO FORCE UPDATE
+const CACHE_NAME = 'offline-player-cache-v3';
 
 // List of files that make up the app shell
-// CORRECTED: Paths now use './' to work on GitHub Pages
 const urlsToCache = [
     './',
     './index.html',
