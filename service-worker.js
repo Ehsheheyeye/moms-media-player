@@ -1,13 +1,16 @@
+// service-worker.js
+
 // Define a unique cache name
 const CACHE_NAME = 'offline-player-cache-v2';
 
 // List of files that make up the app shell
+// CORRECTED: Paths now use './' to work on GitHub Pages
 const urlsToCache = [
-    '/',
-    'index.html',
-    'style.css',
-    'script.js',
-    'manifest.json',
+    './',
+    './index.html',
+    './style.css',
+    './script.js',
+    './manifest.json',
     'https://cdn.tailwindcss.com/',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
     'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/webfonts/fa-solid-900.woff2'
